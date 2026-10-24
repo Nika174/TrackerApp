@@ -4,22 +4,53 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.preference.PreferenceManager
 import com.example.tracker.R
 import com.example.tracker.data.TrackDatabase
+import kotlinx.coroutines.*
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.XYTileSource
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Polyline
-import kotlinx.coroutines.*
 
 class MapFragment : Fragment() {
 
     private var mapView: MapView? = null
     private val db by lazy { TrackDatabase.getInstance(requireContext()) }
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    /**
+     * Keyless OSM-compatible providers verified to return real tiles:
+     * - OSM France (standard Carto style, z0-19)
+     * - OpenTopoMap (topographic, z0-17)
+     * OSM's own tile server answers 403 "Access blocked" for app traffic
+     * and CARTO now returns "API key required" placeholders.
+     */
+    private val sources: List<XYTileSource> by lazy {
+        listOf(
+            XYTileSource(
+                "OSMFrance", 0, 19, 256, ".png",
+                arrayOf(
+                    "https://a.tile.openstreetmap.fr/osmfr/",
+                    "https://b.tile.openstreetmap.fr/osmfr/",
+                    "https://c.tile.openstreetmap.fr/osmfr/"
+                ),
+                "© OpenStreetMap contributors, OSM France"
+            ),
+            XYTileSource(
+                "OpenTopoMap", 0, 17, 256, ".png",
+                arrayOf(
+                    "https://a.tile.opentopomap.org/",
+                    "https://b.tile.opentopomap.org/",
+                    "https://c.tile.opentopomap.org/"
+                ),
+                "© OpenTopoMap (CC-BY-SA), © OpenStreetMap contributors"
+            )
+        )
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -45,27 +76,36 @@ class MapFragment : Fragment() {
         cfg.load(requireContext(), prefs)
         cfg.userAgentValue = "TrackerApp/1.0 (personal Android app; contact: ${requireContext().packageName})"
 
-        // OSM's own tile servers block anonymous app traffic (HTTP 403 -> "Access blocked").
-        // CARTO Voyager is keyless and allowed for light mobile use.
-        val carto = XYTileSource(
-            "CartoVoyager",
-            0,
-            19,
-            256,
-            ".png",
-            arrayOf(
-                "https://a.basemaps.cartocdn.com/rastertiles/voyager/",
-                "https://b.basemaps.cartocdn.com/rastertiles/voyager/",
-                "https://c.basemaps.cartocdn.com/rastertiles/voyager/"
-            ),
-            "© OpenStreetMap contributors, © CARTO"
-        )
-        map.setTileSource(carto)
+        map.setTileSource(currentSource())
         map.setUseDataConnection(true)
         map.setBuiltInZoomControls(true)
         map.setMultiTouchControls(true)
         map.controller.setZoom(15.0)
         map.controller.setCenter(GeoPoint(55.751244, 37.618423))
+    }
+
+    private fun prefs() = PreferenceManager.getDefaultSharedPreferences(requireContext())
+
+    private fun currentSource(): XYTileSource {
+        val idx = prefs().getInt(KEY_SOURCE, 0).coerceIn(0, sources.size - 1)
+        return sources[idx]
+    }
+
+    /** Cycles the base layer; wired to the "Карта" button. */
+    fun switchLayer() {
+        val next = (prefs().getInt(KEY_SOURCE, 0) + 1) % sources.size
+        prefs().edit().putInt(KEY_SOURCE, next).apply()
+        val map = mapView
+        val src = sources[next]
+        if (map != null) {
+            try {
+                map.setTileSource(src)
+                map.invalidate()
+            } catch (t: Throwable) {
+                t.printStackTrace()
+            }
+        }
+        Toast.makeText(requireContext(), "Слой: ${src.name}", Toast.LENGTH_SHORT).show()
     }
 
     private fun refreshTrack() {
@@ -110,5 +150,9 @@ class MapFragment : Fragment() {
     override fun onDestroyView() {
         scope.cancel()
         super.onDestroyView()
+    }
+
+    companion object {
+        private const val KEY_SOURCE = "map_source_index"
     }
 }

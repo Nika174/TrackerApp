@@ -54,6 +54,10 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        findViewById<Button>(R.id.btnLayer).setOnClickListener {
+            (supportFragmentManager.findFragmentById(R.id.mapContainer) as? MapFragment)?.switchLayer()
+        }
+
         showCrashLogIfAny()
     }
 
