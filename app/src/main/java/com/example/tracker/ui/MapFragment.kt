@@ -1,10 +1,12 @@
 package com.example.tracker.ui
 
+import android.content.Context
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
+import androidx.preference.PreferenceManager
 import com.example.tracker.R
 import com.example.tracker.data.TrackDatabase
 import org.osmdroid.config.Configuration
@@ -32,8 +34,9 @@ class MapFragment : Fragment() {
     }
 
     private fun setupMap() {
-        // Initialize osmdroid configuration
-        Configuration.getInstance().load(requireContext(), "osmdroid")
+        // Initialize osmdroid configuration with default SharedPreferences
+        val prefs = PreferenceManager.getDefaultSharedPreferences(requireContext())
+        Configuration.getInstance().load(requireContext(), prefs)
 
         mapView.setBuiltInZoomControls(true)
         mapView.setMultiTouchControls(true)
