@@ -35,8 +35,8 @@ class MapFragment : Fragment() {
         // Initialize osmdroid configuration
         Configuration.getInstance().load(requireContext(), Configuration.DEFAULT_PREFS_NAME)
 
-        mapView.builtInZoomControls = true
-        mapView.multiTouchControls = true
+        mapView.setBuiltInZoomControls(true)
+        mapView.setMultiTouchControls(true)
         mapView.controller.setZoom(16.0)
     }
 
@@ -47,7 +47,7 @@ class MapFragment : Fragment() {
 
             withContext(Dispatchers.Main) {
                 mapView.overlays.clear()
-                
+
                 val geoPoints = mutableListOf<GeoPoint>()
                 points.forEach {
                     geoPoints.add(GeoPoint(it.latitude, it.longitude))
