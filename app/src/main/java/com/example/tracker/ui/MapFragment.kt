@@ -1,10 +1,15 @@
 package com.example.tracker.ui
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import android.location.LocationManager
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.preference.PreferenceManager
 import com.example.tracker.R
@@ -15,10 +20,13 @@ import org.osmdroid.tileprovider.tilesource.XYTileSource
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Polyline
+import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
+import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
 
 class MapFragment : Fragment() {
 
     private var mapView: MapView? = null
+    private var myLocationOverlay: MyLocationNewOverlay? = null
     private val db by lazy { TrackDatabase.getInstance(requireContext()) }
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
@@ -82,6 +90,60 @@ class MapFragment : Fragment() {
         map.setMultiTouchControls(true)
         map.controller.setZoom(15.0)
         map.controller.setCenter(GeoPoint(55.751244, 37.618423))
+
+        setupMyLocation(map)
+        centerOnLastKnown(map)
+    }
+
+    /** Blue "you are here" dot with follow mode. */
+    private fun setupMyLocation(map: MapView) {
+        if (!hasLocationPermission()) return
+        try {
+            val provider = GpsMyLocationProvider(requireContext()).apply {
+                addLocationSource(LocationManager.NETWORK_PROVIDER)
+                addLocationSource(LocationManager.GPS_PROVIDER)
+            }
+            val overlay = MyLocationNewOverlay(provider, map)
+            overlay.enableMyLocation()
+            overlay.enableFollowLocation()
+            map.overlays.add(overlay)
+            myLocationOverlay = overlay
+        } catch (t: Throwable) {
+            t.printStackTrace()
+        }
+    }
+
+    /** Re-checks permission (called after the system dialog) and enables the dot. */
+    fun refreshMyLocation() {
+        val map = mapView ?: return
+        if (myLocationOverlay == null) {
+            setupMyLocation(map)
+        } else {
+            try { myLocationOverlay?.enableMyLocation() } catch (t: Throwable) {}
+        }
+        centerOnLastKnown(map)
+        try { map.invalidate() } catch (t: Throwable) {}
+    }
+
+    private fun hasLocationPermission(): Boolean =
+        ContextCompat.checkSelfPermission(
+            requireContext(), Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+
+    /** Jumps to the last position the device knows about, so the map isn't blank. */
+    private fun centerOnLastKnown(map: MapView) {
+        try {
+            val lm = requireContext().getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return
+            if (!hasLocationPermission()) return
+            val last = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
+                .mapNotNull { p -> runCatching { lm.getLastKnownLocation(p) }.getOrNull() }
+                .maxByOrNull { it.time }
+                ?: return
+            map.controller.setCenter(GeoPoint(last.latitude, last.longitude))
+            map.controller.setZoom(16.0)
+        } catch (t: Throwable) {
+            t.printStackTrace()
+        }
     }
 
     private fun prefs() = PreferenceManager.getDefaultSharedPreferences(requireContext())
@@ -140,10 +202,15 @@ class MapFragment : Fragment() {
     override fun onResume() {
         super.onResume()
         try { mapView?.onResume() } catch (t: Throwable) {}
+        if (myLocationOverlay == null && mapView != null) {
+            mapView?.let { setupMyLocation(it) }
+        }
+        try { myLocationOverlay?.enableMyLocation() } catch (t: Throwable) {}
     }
 
     override fun onPause() {
         super.onPause()
+        try { myLocationOverlay?.disableMyLocation() } catch (t: Throwable) {}
         try { mapView?.onPause() } catch (t: Throwable) {}
     }
 

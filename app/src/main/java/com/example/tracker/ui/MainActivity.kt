@@ -59,6 +59,20 @@ class MainActivity : AppCompatActivity() {
         }
 
         showCrashLogIfAny()
+
+        // Ask right away so the "me" dot can appear on the map.
+        ensureLocationPermission(hint = false)
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQ_PERMS) {
+            (supportFragmentManager.findFragmentById(R.id.mapContainer) as? MapFragment)?.refreshMyLocation()
+        }
     }
 
     /** Adds the map fragment programmatically so a map failure can never kill the app. */
@@ -79,7 +93,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun ensureLocationPermission(): Boolean {
+    private fun ensureLocationPermission(hint: Boolean = true): Boolean {
         val needed = mutableListOf<String>()
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
             != PackageManager.PERMISSION_GRANTED
@@ -95,7 +109,9 @@ class MainActivity : AppCompatActivity() {
         }
         if (needed.isEmpty()) return true
         ActivityCompat.requestPermissions(this, needed.toTypedArray(), REQ_PERMS)
-        Toast.makeText(this, "Разрешите доступ к геолокации и нажмите «Старт» ещё раз", Toast.LENGTH_LONG).show()
+        if (hint) {
+            Toast.makeText(this, "Разрешите доступ к геолокации и нажмите «Старт» ещё раз", Toast.LENGTH_LONG).show()
+        }
         return false
     }
 
