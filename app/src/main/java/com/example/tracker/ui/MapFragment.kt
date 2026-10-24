@@ -105,7 +105,7 @@ class MapFragment : Fragment() {
                 t.printStackTrace()
             }
         }
-        Toast.makeText(requireContext(), "Слой: ${src.name}", Toast.LENGTH_SHORT).show()
+        Toast.makeText(requireContext(), "Слой: ${src.name()}", Toast.LENGTH_SHORT).show()
     }
 
     private fun refreshTrack() {
