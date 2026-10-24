@@ -5,15 +5,17 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
-import com.google.android.gms.maps.*
-import com.google.android.gms.maps.model.*
 import com.example.tracker.R
 import com.example.tracker.data.TrackDatabase
+import org.osmdroid.config.Configuration
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.Polyline
 import kotlinx.coroutines.*
 
-class MapFragment : Fragment(), OnMapReadyCallback {
+class MapFragment : Fragment() {
 
-    private lateinit var gMap: GoogleMap
+    private lateinit var mapView: MapView
     private val db by lazy { TrackDatabase.getInstance(requireContext()) }
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -23,34 +25,60 @@ class MapFragment : Fragment(), OnMapReadyCallback {
         savedInstanceState: Bundle?
     ): View {
         val view = inflater.inflate(R.layout.fragment_map, container, false)
-        val mapFragment = childFragmentManager.findFragmentById(R.id.map) as SupportMapFragment
-        mapFragment.getMapAsync(this)
+        mapView = view.findViewById(R.id.map)
+        setupMap()
+        refreshTrack()
         return view
     }
 
-    override fun onMapReady(map: GoogleMap) {
-        gMap = map
-        gMap.uiSettings.isZoomControlsEnabled = true
-        refreshTrack()
+    private fun setupMap() {
+        // Initialize osmdroid configuration
+        Configuration.getInstance().load(requireContext(), org.osmdroid.api.IConfigurationProvider.DEFAULT_PREFS_NAME)
+
+        mapView.setBuiltInZoomControls(true)
+        mapView.multiTouchControls = true
+        mapView.controller.setZoom(16.0)
     }
 
     private fun refreshTrack() {
         scope.launch {
             val points = db.trackDao().getAll().takeLast(200)
             if (points.isEmpty()) return@launch
-            val options = PolylineOptions().width(8f)
+
+            val polyline = Polyline(mapView)
+            polyline.width = 8f
+            val geoPoints = mutableListOf<GeoPoint>()
+
             points.forEach {
-                options.add(LatLng(it.latitude, it.longitude))
-                options.color(if (it.mode == 1) android.graphics.Color.RED else android.graphics.Color.BLUE)
+                geoPoints.add(GeoPoint(it.latitude, it.longitude))
             }
+
             withContext(Dispatchers.Main) {
-                gMap.clear()
-                gMap.addPolyline(options)
+                polyline.points = geoPoints
+                polyline.color = android.graphics.Color.BLUE // Default color
+                // Color segments based on mode
+                for (i in 0 until geoPoints.size - 1) {
+                    val segment = Polyline(mapView)
+                    segment.points = listOf(geoPoints[i], geoPoints[i + 1])
+                    segment.width = 8f
+                    segment.color = if (points[i].mode == 1) android.graphics.Color.RED else android.graphics.Color.BLUE
+                    mapView.overlays.add(segment)
+                }
+
+                // Move camera to last point
                 val last = points.last()
-                gMap.moveCamera(CameraUpdateFactory.newLatLngZoom(
-                    LatLng(last.latitude, last.longitude), 16f
-                ))
+                mapView.controller.animateTo(GeoPoint(last.latitude, last.longitude))
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        mapView.onResume()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        mapView.onPause()
     }
 }
