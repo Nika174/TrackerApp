@@ -33,7 +33,7 @@ class MapFragment : Fragment() {
 
     private fun setupMap() {
         // Initialize osmdroid configuration
-        Configuration.getInstance().load(requireContext(), Configuration.DEFAULT_PREFS_NAME)
+        Configuration.getInstance().load(requireContext(), "osmdroid")
 
         mapView.setBuiltInZoomControls(true)
         mapView.setMultiTouchControls(true)
