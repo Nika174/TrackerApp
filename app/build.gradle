@@ -1,8 +1,5 @@
-plugins {
-    id 'kotlin-android'
-}
-
 apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
 
 android {
     compileSdk 34
