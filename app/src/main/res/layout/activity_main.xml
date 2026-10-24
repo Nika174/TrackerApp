@@ -4,9 +4,8 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <fragment
-        android:id="@+id/mapFragment"
-        android:name="com.example.tracker.ui.MapFragment"
+    <androidx.fragment.app.FragmentContainerView
+        android:id="@+id/mapContainer"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
@@ -16,6 +15,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
+        android:background="#CC000000"
         android:padding="8dp">
 
         <Button
@@ -23,14 +23,16 @@
             android:text="Старт"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"/>
+
         <Button
             android:id="@+id/btnStop"
             android:text="Стоп"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"/>
+
         <Button
             android:id="@+id/btnExport"
-            android:text="Экспорт GPX"
+            android:text="GPX"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"/>
     </LinearLayout>

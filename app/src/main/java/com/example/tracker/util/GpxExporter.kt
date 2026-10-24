@@ -26,7 +26,7 @@ object GpxExporter {
             sb.append("\n</trkpt>")
         }
         sb.append("\n</trkseg></trk></gpx>")
-        val dir = context.getExternalFilesDir(null)!!
+        val dir = context.getExternalFilesDir(null) ?: context.filesDir
         val file = File(dir, "track_${System.currentTimeMillis()}.gpx")
         file.writeText(sb.toString())
         return file

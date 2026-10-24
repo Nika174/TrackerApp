@@ -16,9 +16,9 @@ import kotlinx.coroutines.*
 
 class MapFragment : Fragment() {
 
-    private lateinit var mapView: MapView
+    private var mapView: MapView? = null
     private val db by lazy { TrackDatabase.getInstance(requireContext()) }
-    private val scope = CoroutineScope(Dispatchers.IO)
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -26,61 +26,69 @@ class MapFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View {
         val view = inflater.inflate(R.layout.fragment_map, container, false)
-        mapView = view.findViewById(R.id.map)
-        setupMap()
+        val map = view.findViewById<MapView>(R.id.map)
+        mapView = map
+        try {
+            setupMap(map)
+        } catch (t: Throwable) {
+            // map problems must never crash the app
+            t.printStackTrace()
+        }
         refreshTrack()
         return view
     }
 
-    private fun setupMap() {
-        // Initialize osmdroid configuration with default SharedPreferences
+    private fun setupMap(map: MapView) {
         val prefs = PreferenceManager.getDefaultSharedPreferences(requireContext())
         Configuration.getInstance().load(requireContext(), prefs)
 
-        mapView.setBuiltInZoomControls(true)
-        mapView.setMultiTouchControls(true)
-        mapView.controller.setZoom(16.0)
+        map.setBuiltInZoomControls(true)
+        map.setMultiTouchControls(true)
+        map.controller.setZoom(15.0)
+        map.controller.setCenter(GeoPoint(55.751244, 37.618423))
     }
 
     private fun refreshTrack() {
         scope.launch {
-            val points = db.trackDao().getAll().takeLast(200)
+            val points = try {
+                db.trackDao().getAll().takeLast(300)
+            } catch (t: Throwable) {
+                emptyList()
+            }
             if (points.isEmpty()) return@launch
-
             withContext(Dispatchers.Main) {
-                mapView.overlays.clear()
-
-                val geoPoints = mutableListOf<GeoPoint>()
-                points.forEach {
-                    geoPoints.add(GeoPoint(it.latitude, it.longitude))
-                }
-
-                if (geoPoints.size >= 2) {
+                val map = mapView ?: return@withContext
+                try {
+                    map.overlays.clear()
+                    val geoPoints = points.map { GeoPoint(it.latitude, it.longitude) }
                     for (i in 0 until geoPoints.size - 1) {
-                        val segmentPoints = arrayListOf(geoPoints[i], geoPoints[i + 1])
-                        // osmdroid 6.1.13: Polyline(mapView) + addPoint() for each point
-                        val segment = Polyline(mapView)
-                        segmentPoints.forEach { segment.addPoint(it) }
+                        val segment = Polyline(map)
+                        segment.addPoint(geoPoints[i])
+                        segment.addPoint(geoPoints[i + 1])
                         segment.width = 8f
-                        segment.color = if (points[i].mode == 1) android.graphics.Color.RED else android.graphics.Color.BLUE
-                        mapView.overlays.add(segment)
+                        segment.color = if (points[i].mode == 1) 0xFFE53935.toInt() else 0xFF1E88E5.toInt()
+                        map.overlays.add(segment)
                     }
+                    map.controller.setCenter(geoPoints.last())
+                } catch (t: Throwable) {
+                    t.printStackTrace()
                 }
-
-                // Move camera to last point
-                val last = points.last()
-                mapView.controller.animateTo(GeoPoint(last.latitude, last.longitude))
             }
         }
     }
 
     override fun onResume() {
         super.onResume()
-        mapView.onResume()
+        try { mapView?.onResume() } catch (t: Throwable) {}
     }
 
     override fun onPause() {
         super.onPause()
-        mapView.onPause()
+        try { mapView?.onPause() } catch (t: Throwable) {}
+    }
+
+    override fun onDestroyView() {
+        scope.cancel()
+        super.onDestroyView()
     }
 }
