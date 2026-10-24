@@ -12,7 +12,6 @@ import android.os.Build
 import android.os.IBinder
 import android.os.Looper
 import androidx.core.app.NotificationCompat
-import androidx.core.app.ServiceCompat
 import com.example.tracker.data.TrackDatabase
 import com.example.tracker.data.TrackPoint
 import com.example.tracker.ui.MainActivity
@@ -29,9 +28,12 @@ class LocationService : Service() {
         super.onCreate()
         try {
             createChannel()
-            val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else 0
-            ServiceCompat.startForeground(this, NOTIF_ID, buildNotification(), type)
+            val notif = buildNotification()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIF_ID, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
+            } else {
+                startForeground(NOTIF_ID, notif)
+            }
 
             fusedClient = LocationServices.getFusedLocationProviderClient(this)
             requestUpdates()
