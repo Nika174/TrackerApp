@@ -9,6 +9,7 @@ import androidx.preference.PreferenceManager
 import com.example.tracker.R
 import com.example.tracker.data.TrackDatabase
 import org.osmdroid.config.Configuration
+import org.osmdroid.tileprovider.tilesource.XYTileSource
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Polyline
@@ -40,8 +41,27 @@ class MapFragment : Fragment() {
 
     private fun setupMap(map: MapView) {
         val prefs = PreferenceManager.getDefaultSharedPreferences(requireContext())
-        Configuration.getInstance().load(requireContext(), prefs)
+        val cfg = Configuration.getInstance()
+        cfg.load(requireContext(), prefs)
+        cfg.userAgentValue = "TrackerApp/1.0 (personal Android app; contact: ${requireContext().packageName})"
 
+        // OSM's own tile servers block anonymous app traffic (HTTP 403 -> "Access blocked").
+        // CARTO Voyager is keyless and allowed for light mobile use.
+        val carto = XYTileSource(
+            "CartoVoyager",
+            0,
+            19,
+            256,
+            ".png",
+            arrayOf(
+                "https://a.basemaps.cartocdn.com/rastertiles/voyager/",
+                "https://b.basemaps.cartocdn.com/rastertiles/voyager/",
+                "https://c.basemaps.cartocdn.com/rastertiles/voyager/"
+            ),
+            "© OpenStreetMap contributors, © CARTO"
+        )
+        map.setTileSource(carto)
+        map.setUseDataConnection(true)
         map.setBuiltInZoomControls(true)
         map.setMultiTouchControls(true)
         map.controller.setZoom(15.0)

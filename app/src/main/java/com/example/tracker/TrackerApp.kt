@@ -17,7 +17,7 @@ class TrackerApp : Application() {
     private fun initOsmdroid() {
         try {
             val cfg = Configuration.getInstance()
-            cfg.userAgentValue = packageName
+            cfg.userAgentValue = "TrackerApp/1.0 (personal Android app; contact: $packageName)"
             val base = File(getExternalFilesDir(null), "osmdroid").apply { mkdirs() }
             cfg.osmdroidBasePath = base
             cfg.osmdroidTileCache = File(base, "tiles").apply { mkdirs() }
