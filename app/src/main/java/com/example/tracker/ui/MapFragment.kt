@@ -33,9 +33,9 @@ class MapFragment : Fragment() {
 
     private fun setupMap() {
         // Initialize osmdroid configuration
-        Configuration.getInstance().load(requireContext(), org.osmdroid.api.IConfigurationProvider.DEFAULT_PREFS_NAME)
+        Configuration.getInstance().load(requireContext(), Configuration.DEFAULT_PREFS_NAME)
 
-        mapView.setBuiltInZoomControls(true)
+        mapView.builtInZoomControls = true
         mapView.multiTouchControls = true
         mapView.controller.setZoom(16.0)
     }
@@ -45,24 +45,22 @@ class MapFragment : Fragment() {
             val points = db.trackDao().getAll().takeLast(200)
             if (points.isEmpty()) return@launch
 
-            val polyline = Polyline(mapView)
-            polyline.width = 8f
-            val geoPoints = mutableListOf<GeoPoint>()
-
-            points.forEach {
-                geoPoints.add(GeoPoint(it.latitude, it.longitude))
-            }
-
             withContext(Dispatchers.Main) {
-                polyline.points = geoPoints
-                polyline.color = android.graphics.Color.BLUE // Default color
-                // Color segments based on mode
-                for (i in 0 until geoPoints.size - 1) {
-                    val segment = Polyline(mapView)
-                    segment.points = listOf(geoPoints[i], geoPoints[i + 1])
-                    segment.width = 8f
-                    segment.color = if (points[i].mode == 1) android.graphics.Color.RED else android.graphics.Color.BLUE
-                    mapView.overlays.add(segment)
+                mapView.overlays.clear()
+                
+                val geoPoints = mutableListOf<GeoPoint>()
+                points.forEach {
+                    geoPoints.add(GeoPoint(it.latitude, it.longitude))
+                }
+
+                if (geoPoints.size >= 2) {
+                    for (i in 0 until geoPoints.size - 1) {
+                        val segment = Polyline(mapView)
+                        segment.points = arrayListOf(geoPoints[i], geoPoints[i + 1])
+                        segment.width = 8f
+                        segment.color = if (points[i].mode == 1) android.graphics.Color.RED else android.graphics.Color.BLUE
+                        mapView.overlays.add(segment)
+                    }
                 }
 
                 // Move camera to last point
