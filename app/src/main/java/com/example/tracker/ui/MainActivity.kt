@@ -9,12 +9,14 @@ import com.example.tracker.service.LocationService
 import com.example.tracker.util.GpxExporter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
 
-    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private val job = SupervisorJob()
+    private val scope = CoroutineScope(Dispatchers.Main + job)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -47,7 +49,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        scope.cancel()
+        job.cancel()
         super.onDestroy()
     }
 }
