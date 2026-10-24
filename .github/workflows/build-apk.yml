@@ -20,8 +20,8 @@ jobs:
           cmdline-tools-version: 12266719
           accept-android-sdk-licenses: true
           packages: platform-tools build-tools;34.0.0 platforms;android-34
-      - name: Generate Gradle wrapper
-        run: gradle wrapper
+      - name: Generate Gradle wrapper (Gradle 8.5)
+        run: gradle wrapper --gradle-version 8.5
       - name: Build with Gradle
         run: ./gradlew assembleDebug
       - name: Upload APK
