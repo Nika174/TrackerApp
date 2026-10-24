@@ -12,7 +12,6 @@ import android.os.IBinder
 import android.os.Looper
 import androidx.core.app.NotificationCompat
 import com.google.android.gms.location.*
-import com.example.tracker.R
 import com.example.tracker.data.TrackDatabase
 import com.example.tracker.data.TrackPoint
 import com.example.tracker.ui.MainActivity
@@ -76,7 +75,7 @@ class LocationService : Service() {
         return NotificationCompat.Builder(this, channelId)
             .setContentTitle("Запись маршрута")
             .setContentText("Отслеживание включено")
-            .setSmallIcon(R.drawable.ic_menu_mylocation)
+            .setSmallIcon(android.R.drawable.ic_menu_mylocation)
             .setContentIntent(pending)
             .setOngoing(true)
             .build()
