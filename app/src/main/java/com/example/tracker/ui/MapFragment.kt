@@ -58,8 +58,8 @@ class MapFragment : Fragment() {
                 if (geoPoints.size >= 2) {
                     for (i in 0 until geoPoints.size - 1) {
                         val segmentPoints = arrayListOf(geoPoints[i], geoPoints[i + 1])
-                        // osmdroid 6.1.13: Polyline constructor with points
-                        val segment = Polyline(segmentPoints, mapView)
+                        // osmdroid 6.1.13: Polyline constructor (MapView, List<GeoPoint>)
+                        val segment = Polyline(mapView, segmentPoints)
                         segment.width = 8f
                         segment.color = if (points[i].mode == 1) android.graphics.Color.RED else android.graphics.Color.BLUE
                         mapView.overlays.add(segment)
