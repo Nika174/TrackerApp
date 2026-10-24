@@ -16,12 +16,12 @@ data class TrackPoint(
 )
 
 @Dao
-interface TrackDao {
+abstract class TrackDao {
     @Insert
-    suspend fun insert(point: TrackPoint)
+    abstract suspend fun insert(point: TrackPoint)
 
     @Query("SELECT * FROM track_point ORDER BY timestamp")
-    suspend fun getAll(): List<TrackPoint>
+    abstract suspend fun getAll(): List<TrackPoint>
 }
 
 @Database(entities = [TrackPoint::class], version = 1, exportSchema = false)
