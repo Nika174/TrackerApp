@@ -118,7 +118,13 @@ class MainActivity : AppCompatActivity() {
 
         val points = withContext(Dispatchers.IO) {
             try {
-                if (viewId > 0) db.trackDao().pointsFor(viewId) else emptyList()
+                val dao = db.trackDao()
+                val last = dao.lastSession()
+                when {
+                    viewId > 0 -> dao.pointsFor(viewId)
+                    last != null -> dao.pointsFor(last.id)
+                    else -> dao.getAll()
+                }
             } catch (t: Throwable) {
                 emptyList()
             }

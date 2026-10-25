@@ -175,7 +175,10 @@ class MapFragment : Fragment() {
                 when {
                     current > 0 -> dao.pointsFor(current)
                     view > 0 -> dao.pointsFor(view)
-                    else -> dao.lastSession()?.let { dao.pointsFor(it.id) } ?: emptyList()
+                    else -> {
+                        val last = dao.lastSession()
+                        if (last != null) dao.pointsFor(last.id) else dao.getAll()
+                    }
                 }
             } catch (t: Throwable) {
                 emptyList()
