@@ -12,11 +12,16 @@ import android.os.Build
 import android.os.IBinder
 import android.os.Looper
 import androidx.core.app.NotificationCompat
+import com.example.tracker.data.SessionManager
 import com.example.tracker.data.TrackDatabase
 import com.example.tracker.data.TrackPoint
+import com.example.tracker.data.TrackSession
 import com.example.tracker.ui.MainActivity
+import com.example.tracker.util.TrackStats
 import com.google.android.gms.location.*
 import kotlinx.coroutines.*
+import java.text.SimpleDateFormat
+import java.util.*
 
 class LocationService : Service() {
 
@@ -24,18 +29,21 @@ class LocationService : Service() {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val db by lazy { TrackDatabase.getInstance(this) }
 
+    @Volatile private var sessionId: Long = 0L
+    @Volatile private var lastPointTimestamp: Long = 0L
+
     override fun onCreate() {
         super.onCreate()
         try {
             createChannel()
-            val notif = buildNotification()
+            val notif = buildNotification("Запись маршрута", "Отслеживание включено")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 startForeground(NOTIF_ID, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
             } else {
                 startForeground(NOTIF_ID, notif)
             }
-
             fusedClient = LocationServices.getFusedLocationProviderClient(this)
+            scope.launch { ensureSession() }
             requestUpdates()
         } catch (t: Throwable) {
             t.printStackTrace()
@@ -61,6 +69,22 @@ class LocationService : Service() {
         }
     }
 
+    private suspend fun ensureSession(): Long {
+        if (sessionId > 0) return sessionId
+        val existing = SessionManager.current(this)
+        if (existing > 0) {
+            sessionId = existing
+            return existing
+        }
+        val name = SimpleDateFormat("d MMM, HH:mm", Locale("ru", "RU")).format(Date())
+        val id = db.trackDao().insertSession(
+            TrackSession(name = name, startedAt = System.currentTimeMillis())
+        )
+        SessionManager.setCurrent(this, id)
+        sessionId = id
+        return id
+    }
+
     private fun saveLocation(loc: android.location.Location) {
         val mode = if (loc.speed > 5f) 1 else 0
         val point = TrackPoint(
@@ -71,7 +95,27 @@ class LocationService : Service() {
             mode = mode
         )
         scope.launch {
-            try { db.trackDao().insert(point) } catch (t: Throwable) { t.printStackTrace() }
+            try {
+                val sid = ensureSession()
+                db.trackDao().insert(point.copy(sessionId = sid))
+                lastPointTimestamp = point.timestamp
+                updateNotification(sid)
+            } catch (t: Throwable) {
+                t.printStackTrace()
+            }
+        }
+    }
+
+    private fun updateNotification(sid: Long) {
+        try {
+            val dao = db.trackDao()
+            val points = runBlocking { dao.pointsFor(sid) }
+            val st = TrackStats.of(points)
+            val text = "${TrackStats.distance(st.distanceM)} • ${TrackStats.duration(st.durationMs)}"
+            val nm = getSystemService(NotificationManager::class.java)
+            nm.notify(NOTIF_ID, buildNotification("Запись идёт", text))
+        } catch (t: Throwable) {
+            t.printStackTrace()
         }
     }
 
@@ -86,7 +130,7 @@ class LocationService : Service() {
         }
     }
 
-    private fun buildNotification(): Notification {
+    private fun buildNotification(title: String, text: String): Notification {
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
@@ -95,11 +139,12 @@ class LocationService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Запись маршрута")
-            .setContentText("Отслеживание включено")
+            .setContentTitle(title)
+            .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
             .setContentIntent(pending)
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
             .build()
     }
 
@@ -107,8 +152,26 @@ class LocationService : Service() {
 
     override fun onDestroy() {
         try { fusedClient.removeLocationUpdates(locationCallback) } catch (t: Throwable) {}
+        closeCurrentSession()
         scope.cancel()
         super.onDestroy()
+    }
+
+    /** Marks the running session as finished and forgets it. */
+    private fun closeCurrentSession() {
+        val sid = SessionManager.current(this)
+        if (sid <= 0) return
+        runBlocking(Dispatchers.IO) {
+            try {
+                val dao = db.trackDao()
+                val end = dao.pointsFor(sid).lastOrNull()?.timestamp ?: System.currentTimeMillis()
+                dao.closeSession(sid, end)
+            } catch (t: Throwable) {
+                t.printStackTrace()
+            }
+        }
+        SessionManager.clearCurrent(this)
+        SessionManager.setViewSession(this, sid)
     }
 
     companion object {

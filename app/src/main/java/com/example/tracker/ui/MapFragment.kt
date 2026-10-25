@@ -13,6 +13,7 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.preference.PreferenceManager
 import com.example.tracker.R
+import com.example.tracker.data.SessionManager
 import com.example.tracker.data.TrackDatabase
 import kotlinx.coroutines.*
 import org.osmdroid.config.Configuration
@@ -32,10 +33,7 @@ class MapFragment : Fragment() {
 
     /**
      * Keyless OSM-compatible providers verified to return real tiles:
-     * - OSM France (standard Carto style, z0-19)
-     * - OpenTopoMap (topographic, z0-17)
-     * OSM's own tile server answers 403 "Access blocked" for app traffic
-     * and CARTO now returns "API key required" placeholders.
+     * OSM France (standard Carto style, z0-19) and OpenTopoMap (topographic, z0-17).
      */
     private val sources: List<XYTileSource> by lazy {
         listOf(
@@ -71,10 +69,9 @@ class MapFragment : Fragment() {
         try {
             setupMap(map)
         } catch (t: Throwable) {
-            // map problems must never crash the app
             t.printStackTrace()
         }
-        refreshTrack()
+        refreshTrackNow()
         return view
     }
 
@@ -113,7 +110,6 @@ class MapFragment : Fragment() {
         }
     }
 
-    /** Re-checks permission (called after the system dialog) and enables the dot. */
     fun refreshMyLocation() {
         val map = mapView ?: return
         if (myLocationOverlay == null) {
@@ -130,7 +126,6 @@ class MapFragment : Fragment() {
             requireContext(), Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
 
-    /** Jumps to the last position the device knows about, so the map isn't blank. */
     private fun centerOnLastKnown(map: MapView) {
         try {
             val lm = requireContext().getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return
@@ -153,7 +148,6 @@ class MapFragment : Fragment() {
         return sources[idx]
     }
 
-    /** Cycles the base layer; wired to the "Карта" button. */
     fun switchLayer() {
         val next = (prefs().getInt(KEY_SOURCE, 0) + 1) % sources.size
         prefs().edit().putInt(KEY_SOURCE, next).apply()
@@ -170,28 +164,43 @@ class MapFragment : Fragment() {
         Toast.makeText(requireContext(), "Слой: ${src.name()}", Toast.LENGTH_SHORT).show()
     }
 
-    private fun refreshTrack() {
+    /** Redraws the polyline of the session being recorded (or the last selected one). */
+    fun refreshTrackNow() {
+        val ctx = requireContext()
         scope.launch {
             val points = try {
-                db.trackDao().getAll().takeLast(300)
+                val dao = db.trackDao()
+                val current = SessionManager.current(ctx)
+                val view = SessionManager.viewSession(ctx)
+                when {
+                    current > 0 -> dao.pointsFor(current)
+                    view > 0 -> dao.pointsFor(view)
+                    else -> dao.lastSession()?.let { dao.pointsFor(it.id) } ?: emptyList()
+                }
             } catch (t: Throwable) {
                 emptyList()
             }
-            if (points.isEmpty()) return@launch
             withContext(Dispatchers.Main) {
                 val map = mapView ?: return@withContext
                 try {
-                    map.overlays.clear()
-                    val geoPoints = points.map { GeoPoint(it.latitude, it.longitude) }
-                    for (i in 0 until geoPoints.size - 1) {
-                        val segment = Polyline(map)
-                        segment.addPoint(geoPoints[i])
-                        segment.addPoint(geoPoints[i + 1])
-                        segment.width = 8f
-                        segment.color = if (points[i].mode == 1) 0xFFE53935.toInt() else 0xFF1E88E5.toInt()
-                        map.overlays.add(segment)
+                    // keep the "my location" overlay, drop old polylines
+                    map.overlays.removeAll { it is Polyline }
+                    if (points.size >= 2) {
+                        val geo = points.map { GeoPoint(it.latitude, it.longitude) }
+                        for (i in 0 until geo.size - 1) {
+                            val segment = Polyline(map)
+                            segment.addPoint(geo[i])
+                            segment.addPoint(geo[i + 1])
+                            segment.width = 7f
+                            segment.color = if (points[i].mode == 1) 0xFFE53935.toInt()
+                            else 0xFF1E88E5.toInt()
+                            map.overlays.add(0, segment)
+                        }
+                        if (myLocationOverlay?.myLocation == null) {
+                            map.controller.setCenter(geo.last())
+                        }
                     }
-                    map.controller.setCenter(geoPoints.last())
+                    map.invalidate()
                 } catch (t: Throwable) {
                     t.printStackTrace()
                 }
@@ -206,6 +215,7 @@ class MapFragment : Fragment() {
             mapView?.let { setupMyLocation(it) }
         }
         try { myLocationOverlay?.enableMyLocation() } catch (t: Throwable) {}
+        refreshTrackNow()
     }
 
     override fun onPause() {
